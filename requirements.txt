@@ -1,0 +1,8 @@
+requests>=2.32,<3
+pandas>=2.2,<3
+python-dotenv>=1.0,<2
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+neo4j>=5.0,<6
+pytest>=8.0,<9
+ruff>=0.6,<1

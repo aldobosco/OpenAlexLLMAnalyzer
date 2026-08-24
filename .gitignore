@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data: retain only .gitkeep and explicitly curated samples
+data/raw/*
+data/staging/*
+data/processed/*
+!data/raw/.gitkeep
+!data/staging/.gitkeep
+!data/processed/.gitkeep
+!data/**/sample_*
+
+# Runtime artefacts
+logs/
+*.log
+
+# Database and Docker artefacts
+*.sql.gz
+*.dump
+*.backup
+postgres_data/
+neo4j_data/
+neo4j_logs/
+neo4j_plugins/
+
+# OS and editors
+.DS_Store
+.vscode/
+.idea/

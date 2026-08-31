@@ -1,5 +1,3 @@
-# Milestone 0 — Approved Scope and Planning
-
 ## 1. Dataset scope
 
 ### Topic area

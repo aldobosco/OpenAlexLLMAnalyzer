@@ -1,8 +1,6 @@
-# Relational model — Milestone 4
-
 ## Scope and source contract
 
-The PostgreSQL relational database is loaded only from the Milestone 3 reconciled CSV files in `data/processed/`. It never reads raw nested OpenAlex JSON. The keys are compact canonical OpenAlex identifiers (for example, `W...`, `A...`, `I...`, `S...`, `T...`).
+The PostgreSQL relational database is loaded only from the Milestone 3 reconciled CSV files in `data/processed/`. It never reads raw nested OpenAlex JSON. The keys are compact canonical OpenAlex identifiers.
 
 ## ER model
 

@@ -45,4 +45,4 @@ Stop services with `docker compose --env-file .env -f docker/compose.yaml down`.
 - Record extraction parameters, source/version, timestamp, pagination state, and counts with each run.
 - Run formatting/linting and tests before opening a pull request.
 
-See `docs/local-setup.md`, `docs/development-conventions.md`, and `docs/github-project-board.md`.
+See `docs/local-setup.md` and `docs/warehouse-model.md`.

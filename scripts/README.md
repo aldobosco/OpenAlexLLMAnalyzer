@@ -4,5 +4,7 @@ Put deterministic command-line scripts in the appropriate stage directory. Each 
 
 - `extract/`: OpenAlex API acquisition; raw response plus run metadata.
 - `transform/`: normalization, deduplication, validation, and processed outputs.
-- `load/`: PostgreSQL, Neo4j, and warehouse loaders.
+- `load/`: PostgreSQL, Neo4j, and warehouse loaders. `load_warehouse.py` reads
+  only the reconciled `data/processed/` CSV files and writes the separate
+  PostgreSQL `warehouse` schema.
 - `evaluation/`: repeatable query timing and comparison collection.

@@ -189,9 +189,9 @@ def transform(run_dir: Path, processed_dir: Path) -> dict[str, Any]:
     sources: dict[str, dict[str, str]] = {}
     topics: dict[str, dict[str, str]] = {}
     works: list[dict[str, str]] = []
-    authorships: set[tuple[str, str, str, str, str]] = set()
+    authorships: dict[tuple[str, str], tuple[str, str, str, str, str]] = {}
     affiliations: set[tuple[str, str, str]] = set()
-    work_topics: set[tuple[str, str, str, str]] = set()
+    work_topics: dict[tuple[str, str], tuple[str, str, str, str]] = {}
     work_sources: set[tuple[str, str, str]] = set()
     citations: set[tuple[str, str]] = set()
 
@@ -226,10 +226,18 @@ def transform(run_dir: Path, processed_dir: Path) -> dict[str, Any]:
                 authors[author_id] = author_row
             else:
                 merge_nonempty(authors[author_id], author_row)
-            authorships.add((
-                work_id, author_id, clean_text(authorship.get("author_position")), str(order),
-                bool_csv(authorship.get("is_corresponding")),
-            ))
+            authorship_key = (work_id, author_id)
+            is_corr = bool_csv(authorship.get("is_corresponding"))
+            if authorship_key not in authorships:
+                authorships[authorship_key] = (
+                    work_id, author_id, clean_text(authorship.get("author_position")), str(order),
+                    is_corr,
+                )
+            else:
+                quality["duplicate_authorships_deduplicated"] += 1
+                if is_corr == "true" and authorships[authorship_key][4] != "true":
+                    existing = authorships[authorship_key]
+                    authorships[authorship_key] = (existing[0], existing[1], existing[2], existing[3], "true")
             for institution in authorship.get("institutions") or []:
                 institution_id = openalex_id(institution.get("id"))
                 if not institution_id:
@@ -282,7 +290,15 @@ def transform(run_dir: Path, processed_dir: Path) -> dict[str, Any]:
                 topics[topic_id] = row
             else:
                 merge_nonempty(topics[topic_id], row)
-            work_topics.add((work_id, topic_id, float_csv(topic.get("score")), bool_csv(topic_id == primary_topic_id)))
+            wt_key = (work_id, topic_id)
+            is_primary = bool_csv(topic_id == primary_topic_id)
+            if wt_key not in work_topics:
+                work_topics[wt_key] = (work_id, topic_id, float_csv(topic.get("score")), is_primary)
+            else:
+                quality["duplicate_work_topics_deduplicated"] += 1
+                if is_primary == "true":
+                    existing = work_topics[wt_key]
+                    work_topics[wt_key] = (existing[0], existing[1], existing[2], "true")
 
         for reference in work.get("referenced_works") or []:
             cited_work_id = openalex_id(reference)
@@ -302,11 +318,11 @@ def transform(run_dir: Path, processed_dir: Path) -> dict[str, Any]:
     errors: list[str] = []
     if work_ids != selected_ids:
         errors.append("works.csv IDs differ from selected IDs")
-    if any(w not in work_ids or a not in author_ids for w, a, *_ in authorships):
+    if any(w not in work_ids or a not in author_ids for w, a, *_ in authorships.values()):
         errors.append("orphan authorship endpoint")
     if any(w not in work_ids or a not in author_ids or i not in institution_ids for w, a, i in affiliations):
         errors.append("orphan affiliation endpoint")
-    if any(w not in work_ids or t not in topic_ids for w, t, *_ in work_topics):
+    if any(w not in work_ids or t not in topic_ids for w, t, *_ in work_topics.values()):
         errors.append("orphan work-topic endpoint")
     if any(w not in work_ids or s not in source_ids for w, s, _ in work_sources):
         errors.append("orphan work-source endpoint")
@@ -321,9 +337,9 @@ def transform(run_dir: Path, processed_dir: Path) -> dict[str, Any]:
         "institutions.csv": (ENTITY_COLUMNS["institutions.csv"], [institutions[key] for key in sorted(institutions)]),
         "sources.csv": (ENTITY_COLUMNS["sources.csv"], [sources[key] for key in sorted(sources)]),
         "topics.csv": (ENTITY_COLUMNS["topics.csv"], [topics[key] for key in sorted(topics)]),
-        "authorships.csv": (RELATION_COLUMNS["authorships.csv"], [dict(zip(RELATION_COLUMNS["authorships.csv"], row)) for row in sorted(authorships)]),
+        "authorships.csv": (RELATION_COLUMNS["authorships.csv"], [dict(zip(RELATION_COLUMNS["authorships.csv"], row)) for row in sorted(authorships.values())]),
         "affiliations.csv": (RELATION_COLUMNS["affiliations.csv"], [dict(zip(RELATION_COLUMNS["affiliations.csv"], row)) for row in sorted(affiliations)]),
-        "work_topics.csv": (RELATION_COLUMNS["work_topics.csv"], [dict(zip(RELATION_COLUMNS["work_topics.csv"], row)) for row in sorted(work_topics)]),
+        "work_topics.csv": (RELATION_COLUMNS["work_topics.csv"], [dict(zip(RELATION_COLUMNS["work_topics.csv"], row)) for row in sorted(work_topics.values())]),
         "work_sources.csv": (RELATION_COLUMNS["work_sources.csv"], [dict(zip(RELATION_COLUMNS["work_sources.csv"], row)) for row in sorted(work_sources)]),
         "citations.csv": (RELATION_COLUMNS["citations.csv"], [dict(zip(RELATION_COLUMNS["citations.csv"], row)) for row in sorted(citations)]),
     }

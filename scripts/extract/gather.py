@@ -16,7 +16,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import requests
 from dotenv import load_dotenv
@@ -154,134 +154,177 @@ def extract(root: Path) -> None:
     print(f"Next: python {Path(__file__).as_posix()} profile --run-id {run_id}")
 
 
-def load_unique_works(run_dir: Path) -> tuple[dict[str, dict[str, Any]], int]:
-    works: dict[str, dict[str, Any]] = {}
+def update_profile(
+    work: dict[str, Any],
+    state: dict[str, Any],
+    start_year: int = START_YEAR,
+    end_year: int = END_YEAR,
+) -> None:
+    work_id = openalex_id(work.get("id"))
+    if not work_id:
+        return
+
+    title = (work.get("title") or "").strip()
+    year = work.get("publication_year")
+    if not title:
+        state["exclusion_reasons"]["missing_title"] += 1
+        state["missing"]["title"] += 1
+        return
+    if not (start_year <= (year or -1) <= end_year):
+        state["exclusion_reasons"]["outside_year_range"] += 1
+        return
+    if work.get("type") not in ALLOWED_TYPES.split("|"):
+        state["exclusion_reasons"]["excluded_type"] += 1
+        return
+
+    abstract = reconstruct_abstract(work.get("abstract_inverted_index"))
+    if not VALIDATION_RE.search(f"{title}\n{abstract}"):
+        state["exclusion_reasons"]["failed_title_abstract_validation"] += 1
+        return
+
+    state["validated_candidate_count"] += 1
+    state["years"][str(year)] += 1
+    if not abstract:
+        state["missing"]["abstract"] += 1
+    if not work.get("doi"):
+        state["missing"]["doi"] += 1
+    if not work.get("publication_date"):
+        state["missing"]["publication_date"] += 1
+
+    authorships = work.get("authorships") or []
+    state["author_counts"].append(len(authorships))
+    for authorship in authorships:
+        author_id = openalex_id((authorship.get("author") or {}).get("id"))
+        if author_id:
+            state["author_ids"].add(author_id)
+        else:
+            state["missing"]["author_id"] += 1
+        for institution in authorship.get("institutions") or []:
+            institution_id = openalex_id(institution.get("id"))
+            if institution_id:
+                state["institution_ids"].add(institution_id)
+                state["affiliation_count"] += 1
+
+    source_id = openalex_id((((work.get("primary_location") or {}).get("source") or {}).get("id")))
+    if source_id:
+        state["source_ids"].add(source_id)
+    else:
+        state["missing"]["primary_source_id"] += 1
+
+    for topic in work.get("topics") or []:
+        topic_id = openalex_id(topic.get("id"))
+        if topic_id:
+            state["topic_ids"].add(topic_id)
+            state["topic_count"] += 1
+
+    references = work.get("referenced_works") or []
+    if references:
+        state["works_with_references"] += 1
+        state["external_reference_count"] += len(references)
+
+    cited_by = work.get("cited_by_count") or 0
+    clean_refs = [openalex_id(ref) for ref in references if openalex_id(ref)]
+    state["candidate_works"].setdefault(year, []).append((cited_by, work_id, clean_refs))
+
+
+def load_unique_works(
+    run_dir: Path,
+    on_work: Callable[[dict[str, Any]], None] | None = None,
+) -> tuple[set[str], int]:
+    seen_ids: set[str] = set()
     duplicate_occurrences = 0
     for page_path in sorted((run_dir / "responses").glob("*.json")):
         page = json.loads(page_path.read_text(encoding="utf-8"))
-        for work in page.get("results", []):
+        for work in page.get("results", []) or []:
             work_id = openalex_id(work.get("id"))
             if not work_id:
                 continue
-            if work_id in works:
+            if work_id in seen_ids:
                 duplicate_occurrences += 1
                 continue
-            works[work_id] = work
-    return works, duplicate_occurrences
+            seen_ids.add(work_id)
+            if on_work is not None:
+                on_work(work)
+    return seen_ids, duplicate_occurrences
 
 
-def profile(root: Path, run_id: str) -> None:
+def profile(
+    root: Path,
+    run_id: str,
+    start_year: int = START_YEAR,
+    end_year: int = END_YEAR,
+) -> None:
     run_dir = root / "data" / "raw" / "openalex" / run_id
     if not run_dir.exists():
         raise SystemExit(f"No raw extraction directory exists at {run_dir}")
-    works, duplicate_occurrences = load_unique_works(run_dir)
 
-    validated: dict[str, dict[str, Any]] = {}
-    exclusion_reasons: Counter[str] = Counter()
-    years: Counter[str] = Counter()
-    author_counts: list[int] = []
-    topic_count = 0
-    affiliation_count = 0
-    works_with_references = 0
-    external_reference_count = 0
-    author_ids: set[str] = set()
-    institution_ids: set[str] = set()
-    source_ids: set[str] = set()
-    topic_ids: set[str] = set()
-    missing: Counter[str] = Counter()
+    state: dict[str, Any] = {
+        "validated_candidate_count": 0,
+        "exclusion_reasons": Counter(),
+        "years": Counter(),
+        "author_counts": [],
+        "topic_count": 0,
+        "affiliation_count": 0,
+        "works_with_references": 0,
+        "external_reference_count": 0,
+        "author_ids": set(),
+        "institution_ids": set(),
+        "source_ids": set(),
+        "topic_ids": set(),
+        "missing": Counter(),
+        "candidate_works": {},
+    }
 
-    for work_id, work in works.items():
-        title = (work.get("title") or "").strip()
-        abstract = reconstruct_abstract(work.get("abstract_inverted_index"))
-        year = work.get("publication_year")
-        if not title:
-            exclusion_reasons["missing_title"] += 1
-            missing["title"] += 1
-            continue
-        if not (START_YEAR <= (year or -1) <= END_YEAR):
-            exclusion_reasons["outside_year_range"] += 1
-            continue
-        if work.get("type") not in ALLOWED_TYPES.split("|"):
-            exclusion_reasons["excluded_type"] += 1
-            continue
-        if not VALIDATION_RE.search(f"{title}\n{abstract}"):
-            exclusion_reasons["failed_title_abstract_validation"] += 1
-            continue
-        validated[work_id] = work
-        years[str(year)] += 1
-        if not abstract:
-            missing["abstract"] += 1
-        if not work.get("doi"):
-            missing["doi"] += 1
-        if not work.get("publication_date"):
-            missing["publication_date"] += 1
-        authorships = work.get("authorships") or []
-        author_counts.append(len(authorships))
-        for authorship in authorships:
-            author_id = openalex_id((authorship.get("author") or {}).get("id"))
-            if author_id:
-                author_ids.add(author_id)
-            else:
-                missing["author_id"] += 1
-            for institution in authorship.get("institutions") or []:
-                institution_id = openalex_id(institution.get("id"))
-                if institution_id:
-                    institution_ids.add(institution_id)
-                    affiliation_count += 1
-        source_id = openalex_id((((work.get("primary_location") or {}).get("source") or {}).get("id")))
-        if source_id:
-            source_ids.add(source_id)
-        else:
-            missing["primary_source_id"] += 1
-        for topic in work.get("topics") or []:
-            topic_id = openalex_id(topic.get("id"))
-            if topic_id:
-                topic_ids.add(topic_id)
-                topic_count += 1
-        references = work.get("referenced_works") or []
-        if references:
-            works_with_references += 1
-            external_reference_count += len(references)
+    seen_ids, duplicate_occurrences = load_unique_works(
+        run_dir,
+        on_work=lambda work: update_profile(work, state, start_year=start_year, end_year=end_year),
+    )
 
     selected_by_year: dict[str, list[str]] = {}
     retained_ids: set[str] = set()
-    for year in range(START_YEAR, END_YEAR + 1):
-        year_works = [work for work in validated.values() if work.get("publication_year") == year]
-        year_works.sort(key=lambda w: (-(w.get("cited_by_count") or 0), openalex_id(w.get("id")) or ""))
-        selected = year_works[:MAX_PER_YEAR]
-        selected_by_year[str(year)] = [openalex_id(work.get("id")) for work in selected]
-        retained_ids.update(selected_by_year[str(year)])
+    retained_references: dict[str, list[str]] = {}
+    for year in range(start_year, end_year + 1):
+        year_candidates = state["candidate_works"].get(year, [])
+        year_candidates.sort(key=lambda item: (-item[0], item[1]))
+        selected = year_candidates[:MAX_PER_YEAR]
+        selected_ids = [item[1] for item in selected]
+        selected_by_year[str(year)] = selected_ids
+        retained_ids.update(selected_ids)
+        for item in selected:
+            retained_references[item[1]] = item[2]
 
     internal_edges = {
-        (work_id, openalex_id(reference))
-        for work_id in retained_ids
-        for reference in (validated[work_id].get("referenced_works") or [])
-        if openalex_id(reference) in retained_ids and openalex_id(reference) != work_id
+        (work_id, ref)
+        for work_id, refs in retained_references.items()
+        for ref in refs
+        if ref in retained_ids and ref != work_id
     }
     selected_counts = {year: len(ids) for year, ids in selected_by_year.items()}
     profile_data = {
         "run_id": run_id,
         "profiled_at_utc": datetime.now(timezone.utc).isoformat(),
-        "raw_unique_work_count": len(works),
+        "raw_unique_work_count": len(seen_ids),
         "duplicate_work_occurrences_across_seed_queries": duplicate_occurrences,
-        "validated_candidate_work_count": len(validated),
-        "exclusion_reasons": dict(exclusion_reasons),
-        "candidate_year_distribution": dict(sorted(years.items())),
-        "missing_field_counts_in_validated_candidates": dict(missing),
+        "validated_candidate_work_count": state["validated_candidate_count"],
+        "exclusion_reasons": dict(state["exclusion_reasons"]),
+        "candidate_year_distribution": dict(sorted(state["years"].items())),
+        "missing_field_counts_in_validated_candidates": dict(state["missing"]),
         "author_count_per_work": {
-            "min": min(author_counts, default=0),
-            "max": max(author_counts, default=0),
-            "mean": round(sum(author_counts) / len(author_counts), 3) if author_counts else 0,
+            "min": min(state["author_counts"], default=0),
+            "max": max(state["author_counts"], default=0),
+            "mean": round(sum(state["author_counts"]) / len(state["author_counts"]), 3) if state["author_counts"] else 0,
         },
         "distinct_entities_in_validated_candidates": {
-            "authors": len(author_ids), "institutions": len(institution_ids),
-            "sources": len(source_ids), "topics": len(topic_ids),
+            "authors": len(state["author_ids"]),
+            "institutions": len(state["institution_ids"]),
+            "sources": len(state["source_ids"]),
+            "topics": len(state["topic_ids"]),
         },
         "coverage": {
-            "works_with_at_least_one_reference": works_with_references,
-            "reference_list_entries": external_reference_count,
-            "topic_assignments": topic_count,
-            "affiliation_links": affiliation_count,
+            "works_with_at_least_one_reference": state["works_with_references"],
+            "reference_list_entries": state["external_reference_count"],
+            "topic_assignments": state["topic_count"],
+            "affiliation_links": state["affiliation_count"],
         },
         "deterministic_selection": {
             "rule": "Within each publication year, validated works sorted by cited_by_count descending then OpenAlex ID ascending; retain first 800.",
@@ -314,13 +357,15 @@ def main() -> None:
     parser.add_argument("command", choices=["extract", "profile"])
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--run-id")
+    parser.add_argument("--start-year", type=int, default=START_YEAR)
+    parser.add_argument("--end-year", type=int, default=END_YEAR)
     args = parser.parse_args()
     if args.command == "extract":
         extract(args.root)
     else:
         if not args.run_id:
             parser.error("profile requires --run-id")
-        profile(args.root, args.run_id)
+        profile(args.root, args.run_id, start_year=args.start_year, end_year=args.end_year)
 
 
 if __name__ == "__main__":

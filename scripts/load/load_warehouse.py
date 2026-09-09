@@ -25,8 +25,20 @@ REQUIRED_FILES = (
 )
 
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 def connection_string() -> str:
-    return os.environ.get("DATABASE_URL", "postgresql://openalex:openalex@localhost:5432/openalex")
+    if "DATABASE_URL" in os.environ:
+        return os.environ["DATABASE_URL"]
+    user = os.getenv("POSTGRES_USER", "openalex_app")
+    password = os.getenv("POSTGRES_PASSWORD", "openalex")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
+    db = os.getenv("POSTGRES_DB", "openalex")
+    return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:

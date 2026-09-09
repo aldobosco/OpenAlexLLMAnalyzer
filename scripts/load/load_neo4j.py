@@ -166,12 +166,23 @@ def load_relationships(session, processed_dir: Path, filename: str) -> int:
     return total
 
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load reconciled OpenAlex CSVs into Neo4j.")
     parser.add_argument("--processed-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--uri", default=os.getenv("NEO4J_URI", "bolt://localhost:7687"))
-    parser.add_argument("--user", default=os.getenv("NEO4J_USER", "neo4j"))
-    parser.add_argument("--password", default=os.getenv("NEO4J_PASSWORD"))
+    user_default = os.getenv("NEO4J_USER", "neo4j")
+    pwd_default = os.getenv("NEO4J_PASSWORD")
+    if not pwd_default and os.getenv("NEO4J_AUTH") and "/" in os.getenv("NEO4J_AUTH", ""):
+        parts = os.getenv("NEO4J_AUTH", "").split("/", 1)
+        user_default = parts[0] or user_default
+        pwd_default = parts[1]
+    parser.add_argument("--user", default=user_default)
+    parser.add_argument("--password", default=pwd_default)
     parser.add_argument("--database", default=os.getenv("NEO4J_DATABASE", "neo4j"))
     parser.add_argument("--reset", action="store_true", help="Delete all graph nodes and relationships first.")
     args = parser.parse_args()

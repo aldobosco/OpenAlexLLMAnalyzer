@@ -94,9 +94,8 @@ The final graph therefore uses labels `Work`, `Author`, `Institution`, `Source`,
 | Q4 | Which author–institution collaborations produce the most works and the highest citation impact, by year? | R | Tests many-to-many authorship/affiliation joins and aggregate correctness |
 | Q5 | Which LLM works are connected by citation paths of length 2–4, and what are the shortest paths between selected highly cited works? | G | Tests directed variable-length traversals that are naturally expressed in Cypher |
 | Q6 | Which authors act as bridges between otherwise weakly connected co-authorship communities, and which institutions do they connect? | G | Uses projected co-author paths, community/centrality analysis, and affiliations |
-| Q7 | For a selected work or author, which in-scope works are the strongest related recommendations based on shared authors, topics, or cited references? | G | Combines multiple relationship types and weighted graph patterns |
 
-Q2 and Q4 will be part of the shared SQL/Cypher comparison suite only where identical semantics can be guaranteed. Q1 and Q3 are warehouse-led questions; Q5–Q7 are graph-led questions. At least 4–6 questions spanning aggregation, multi-table joins, collaboration, citations, and time/topic analysis will be implemented with equivalent SQL and Cypher versions where applicable.
+Q2 and Q4 will be part of the shared SQL/Cypher comparison suite only where identical semantics can be guaranteed. Q1 and Q3 are warehouse-led questions; Q5–Q6 are graph-led questions. At least 4–6 questions spanning aggregation, multi-table joins, collaboration, citations, and time/topic analysis will be implemented with equivalent SQL and Cypher versions where applicable.
 
 ## 6. Warehouse design commitments
 

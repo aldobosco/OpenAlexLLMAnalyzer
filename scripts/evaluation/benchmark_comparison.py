@@ -65,6 +65,181 @@ def get_neo4j_driver(
 # ==============================================================================
 
 WORKLOADS = {
+        "Q1": {
+            "title": "LLM/Generative-AI Evolution by Year, Work Type, and Source",
+            "description": "Roll-up and drill-down of LLM/Generative-AI works by publication year, work type, and source with work counts and citation statistics",
+            "relational": """
+        WITH ai_works AS (
+            SELECT DISTINCT
+                w.work_id,
+                w.publication_year,
+                w.work_type,
+                w.cited_by_count
+            FROM works w
+            JOIN work_topics wt
+                ON wt.work_id = w.work_id
+            JOIN topics t
+                ON t.topic_id = wt.topic_id
+            WHERE t.subfield_name = 'Artificial Intelligence'
+        )
+        SELECT
+            aw.publication_year,
+            aw.work_type,
+            s.source_id,
+            s.display_name AS source_name,
+            COUNT(*) AS work_count,
+            AVG(aw.cited_by_count) AS avg_citations,
+            PERCENTILE_CONT(0.5)
+                WITHIN GROUP (ORDER BY aw.cited_by_count) AS median_citations
+        FROM ai_works aw
+        LEFT JOIN work_sources ws
+            ON ws.work_id = aw.work_id
+        LEFT JOIN sources s
+            ON s.source_id = ws.source_id
+        GROUP BY ROLLUP (
+                aw.publication_year,
+                aw.work_type,
+                s.source_id,
+                s.display_name
+        )
+        ORDER BY
+                aw.publication_year NULLS LAST,
+                aw.work_type NULLS LAST,
+                source_name NULLS LAST;    """,
+            
+    "warehouse": """
+       WITH ai_works AS (
+        SELECT DISTINCT
+            f.work_key,
+            f.publication_year,
+            wt.work_type,
+            f.cited_by_count,
+            f.source_key
+        FROM warehouse.fact_work f
+        JOIN warehouse.dim_work_type wt
+          ON wt.work_type_key = f.work_type_key
+        JOIN warehouse.bridge_work_topic bwt
+          ON bwt.work_key = f.work_key
+        JOIN warehouse.dim_topic t
+          ON t.topic_key = bwt.topic_key
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        )
+        SELECT
+            aw.publication_year,
+            aw.work_type,
+            s.source_id,
+            s.display_name AS source_name,
+            COUNT(*) AS work_count,
+            AVG(aw.cited_by_count) AS avg_citations,
+            PERCENTILE_CONT(0.5)
+                WITHIN GROUP (ORDER BY aw.cited_by_count) AS median_citations
+        FROM ai_works aw
+        LEFT JOIN warehouse.dim_source s
+          ON s.source_key = aw.source_key
+        GROUP BY ROLLUP (
+            aw.publication_year,
+            aw.work_type,
+            s.source_id,
+            s.display_name
+        )
+        ORDER BY
+            aw.publication_year NULLS LAST,
+            aw.work_type NULLS LAST,
+            source_name NULLS LAST;
+    """,
+
+    "graph": """
+
+        MATCH (w:Work)-[:HAS_TOPIC]->(t:Topic)
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        
+        WITH DISTINCT w
+        OPTIONAL MATCH (w)-[:PUBLISHED_IN]->(s:Source)
+        
+        RETURN
+            w.publication_year AS publication_year,
+            w.work_type AS work_type,
+            s.id AS source_id,
+            s.display_name AS source_name,
+            count(*) AS work_count,
+            avg(w.cited_by_count) AS avg_citations,
+            percentileCont(w.cited_by_count, 0.5) AS median_citations
+        
+        UNION ALL
+        
+        
+        MATCH (w:Work)-[:HAS_TOPIC]->(t:Topic)
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        
+        WITH DISTINCT w
+        OPTIONAL MATCH (w)-[:PUBLISHED_IN]->(s:Source)
+        
+        RETURN
+            w.publication_year AS publication_year,
+            w.work_type AS work_type,
+            s.id AS source_id,
+            null AS source_name,
+            count(*) AS work_count,
+            avg(w.cited_by_count) AS avg_citations,
+            percentileCont(w.cited_by_count, 0.5) AS median_citations
+        
+        UNION ALL
+        
+        
+        MATCH (w:Work)-[:HAS_TOPIC]->(t:Topic)
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        
+        WITH DISTINCT w
+        
+        RETURN
+            w.publication_year AS publication_year,
+            w.work_type AS work_type,
+            null AS source_id,
+            null AS source_name,
+            count(*) AS work_count,
+            avg(w.cited_by_count) AS avg_citations,
+            percentileCont(w.cited_by_count, 0.5) AS median_citations
+        
+        UNION ALL
+        
+        
+        MATCH (w:Work)-[:HAS_TOPIC]->(t:Topic)
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        
+        WITH DISTINCT w
+        
+        RETURN
+            w.publication_year AS publication_year,
+            null AS work_type,
+            null AS source_id,
+            null AS source_name,
+            count(*) AS work_count,
+            avg(w.cited_by_count) AS avg_citations,
+            percentileCont(w.cited_by_count, 0.5) AS median_citations
+        
+        UNION ALL
+        
+        
+        MATCH (w:Work)-[:HAS_TOPIC]->(t:Topic)
+        WHERE t.subfield_name = 'Artificial Intelligence'
+        
+        WITH DISTINCT w
+        
+        RETURN
+            null AS publication_year,
+            null AS work_type,
+            null AS source_id,
+            null AS source_name,
+            count(*) AS work_count,
+            avg(w.cited_by_count) AS avg_citations,
+            percentileCont(w.cited_by_count, 0.5) AS median_citations
+        
+        ORDER BY
+            publication_year,
+            work_type,
+            source_name;
+    """
+},
     "Q2A": {
         "title": "Top 20 Authors Productivity (Aggregation)",
         "description": "Group-by over author-work relationships with citation sum and count",

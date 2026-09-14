@@ -26,249 +26,315 @@ style: |
 
 ---
 
-## 1. Project Goal & Motivation
+## 1. Project Purpose & Multi-Paradigm Comparison
 
-### Core Research Objective
-Build a **fully reproducible, multi-paradigm database evaluation system** that extracts scholarly literature from OpenAlex and loads identical datasets into:
-1. **Relational Database (PostgreSQL OLTP - 3NF):** Entity integrity & tabular joins.
-2. **Graph Database (Neo4j LPG):** Native index-free citation & co-authorship traversals.
-3. **Data Warehouse (PostgreSQL Star Schema - DFM):** Dimensional roll-up, drill-down & OLAP slicing.
+### Purpose of the Project
+- Build a **fully reproducible, end-to-end multi-paradigm database evaluation system** that extracts scholarly literature on Large Language Models (LLM) and Generative AI (2020–2025) from the OpenAlex API.
+- Analyze research dissemination in a fast-moving AI domain: massive preprint volumes (arXiv), rapid citation cascades, heterogeneous multi-author and multi-institutional collaborations, and dynamic topic hierarchies.
 
-### Domain Focus: LLMs & Generative AI (2020–2025)
-- Fast-evolving scholarly domain with massive preprint volume (arXiv) and high collaboration.
-- Non-trivial heterogeneous networks: multi-authored papers, institutional affiliations, cross-domain topic hierarchies, and directed citation cascades.
+### Multi-Paradigm Comparison
+Load an **identical frozen dataset** into three distinct database paradigms to evaluate:
+1. **Relational Database (PostgreSQL 3NF):** Entity integrity, normalized relational algebra, foreign keys, and B-Tree indexing.
+2. **Graph Database (Neo4j LPG):** Index-Free Adjacency (IFA), variable-length topological path traversal, and bipartite network expansions.
+3. **Data Warehouse (PostgreSQL Star Schema - DFM):** Dimensional roll-up, drill-down, slicing, and multi-valued bridge table accounting.
+- **Evaluation Dimensions:** Query expressiveness (SQL vs. Cypher vs. Star SQL), execution latency (median wall-clock ms), memory behavior, and structural data modeling fit.
 
 ---
 
-## 2. Target Scope & Boundary Rules
+## 2. End-to-End System Architecture & Workflow
 
-### Inclusion & Capping Rules
-- **Publication Window:** 1 January 2020 to 31 December 2025.
-- **Work Types:** `article`, `review`, `preprint` (excluding books, editorials, corrections).
+```mermaid
+flowchart TD
+    API["OpenAlex REST API\n(Cursor Pagination, Seeds, Polite Pool)"] --> RAW["Raw Storage (data/raw/openalex/<run_id>/)\n- Immutable JSON Pages\n- scope_manifest.json + SHA-256 Hashes"]
+    RAW --> ETL["Python ETL Engine (scripts/transform/run_etl.py)\n- Abstract Inverted Index Reconstruction\n- Strict Closed-Network Citation Pruning\n- Contextual Affiliation Extraction"]
+    ETL --> CSV["Normalized Reconciled CSVs (data/processed/)\n10 Reconciled Contracts (5 Entities, 5 Relations)"]
+    
+    CSV -->|scripts/load/load_postgres.py\nStreaming COPY| PG["PostgreSQL Relational (3NF)\nSchema: openalex"]
+    CSV -->|scripts/load/load_neo4j.py\nUNWIND ... MERGE Batch| NEO["Neo4j Graph (LPG)\nLabels, Properties, Relationships"]
+    CSV -->|scripts/load/load_warehouse.py\nDimension & Fact Load| DWH["PostgreSQL Data Warehouse\nSchema: warehouse (Star Schema DFM)"]
+    
+    PG --> BENCH["Benchmark Runner\nscripts/evaluation/benchmark_comparison.py"]
+    NEO --> BENCH
+    DWH --> BENCH
+    BENCH --> RES["Performance Results & Profiling\ndocs/analys_results.txt"]
+```
+
+---
+
+## 3. ETL Process: The Common Backbone
+
+### Unified Reconciled Contract (Described Once)
+To ensure **100% data and semantic parity**, all three databases are loaded exclusively from a single shared processed layer in `data/processed/`. Neither Neo4j nor the Data Warehouse reads raw API JSON or intermediate relational tables.
+
+```mermaid
+flowchart LR
+    subgraph Backbone ["Single Source of Truth: data/processed/ (10 Normalized CSVs)"]
+        direction TB
+        E["5 Entity Contracts:\nworks.csv · authors.csv · institutions.csv\nsources.csv · topics.csv"]
+        R["5 Relational Contracts:\nauthorships.csv · affiliations.csv · work_topics.csv\nwork_sources.csv · citations.csv"]
+    end
+    Backbone --> PG["PostgreSQL (openalex)"]
+    Backbone --> NEO["Neo4j (LPG)"]
+    Backbone --> DWH["Data Warehouse (warehouse)"]
+```
+
+- **Parity Guarantees:** Identical entity keys, exact row counts, zero phantom nodes, and zero broken foreign keys across all three backends.
+
+---
+
+## 4. ETL Workflow: Extraction (`scripts/extract/gather.py`)
+
+### API Extraction Rules
+- **Source:** OpenAlex REST API `/works` endpoint via cursor pagination (`cursor=*`).
+- **Filters:** Publication years 2020–2025; types `article`, `review`, `preprint`.
 - **Search Seeds:** `"large language model"`, `"generative AI"`, `"foundation model"`, `"transformer language model"`.
-- **Validation Expression:** Regular expression validation against title/abstract.
-- **Deterministic Hard Caps:** Max 800 works/year (~4,800 total cap), selected by `cited_by_count DESC, id ASC`.
+- **Validation:** Regular expression match on `title` and reconstructed `abstract`.
+- **Deterministic Capping:** Max 800 works/year (~4,800 max), sorted by `cited_by_count DESC, id ASC`.
 
-### Analytical Questions
-- **Q1 (OLAP):** Production evolution, average & median citations by year and work type.
-- **Q2 (Relational/OLAP):** Productivity & impact rankings for authors, institutions, and sources.
-- **Q3 (OLAP):** Topic subfield growth across the OpenAlex domain hierarchy.
-- **Q4 (Relational):** Inter-institutional collaborative partnerships by publication year.
-- **Q5–Q7 (Graph):** Multi-hop citation chains (2–4 hops), co-author degree bridges, and contextual recommendations.
-
----
-
-## 3. End-to-End System Architecture
-
-```
-                       [ OpenAlex REST API ]
-                                | (Cursor Pagination, Seeds, Polite Pool)
-                                v
-                   [ data/raw/openalex/<run_id>/ ]
-                     - Immutable JSON pages
-                     - Scope manifest + SHA-256 hashes
-                                |
-                                v
-                 [ Python ETL: scripts/transform/run_etl.py ]
-                     - Abstract inverted index reconstruction
-                     - Closed-network citation pruning
-                     - Discarding dangling references & self-loops
-                                |
-                                v
-                     [ data/processed/*.csv ]
-                     (10 Reconciled Normalized CSVs)
-                   /            |             \
-                  v             v              v
-         [ PostgreSQL OLTP ] [ Neo4j LPG ] [ Data Warehouse ]
-           Schema: openalex    Labels &      Schema: warehouse
-             (3NF Tables)     Properties       (Star Schema)
+```mermaid
+flowchart LR
+    API["OpenAlex REST API"] -->|Cursor Pagination| FILTER["Filter & Regex Validate\n(Years, Types, Seeds)"]
+    FILTER -->|Sort Citations DESC, ID ASC| CAP["Deterministic Hard Cap\n(Max 800 Works/Year)"]
+    CAP -->|Emit| RAW["Raw JSON Responses +\nscope_manifest.json + Hashes"]
 ```
 
 ---
 
-## 4. Normalized Data Layer (10 Reconciled Contracts)
+## 5. ETL Workflow: Transformation (`scripts/transform/run_etl.py`)
 
-The dataset is frozen into 10 canonical CSV files loaded identically across all backends:
+### Core Transformation Logic
+1. **Abstract Inverted Index Reconstruction:** Reconstructs token positional indexes into complete abstract plaintext.
+2. **Closed-Network Citation Pruning:**
+   $$\text{Edges Retained} = \{ (u, v) \in \text{Citations} \mid u \in \text{Works}_{\text{retained}} \land v \in \text{Works}_{\text{retained}} \land u \ne v \}$$
+   - Prunes external references and work self-loops ($u = v$), eliminating dangling relational foreign keys and phantom graph nodes.
+3. **Contextual Affiliations:** Affiliations are contextualized to $(work\_id, author\_id, institution\_id)$.
 
-| Category | File / Relation | Natural / Primary Key | Key Attributes |
-|---|---|---|---|
-| **Entities** | `works.csv` | `work_id` | `doi`, `title`, `abstract`, `publication_date`, `year`, `work_type`, `citations` |
-| | `authors.csv` | `author_id` | `display_name` |
-| | `institutions.csv` | `institution_id` | `display_name`, `country_code`, `institution_type` |
-| | `sources.csv` | `source_id` | `display_name`, `source_type`, `issn`, `publisher` |
-| | `topics.csv` | `topic_id` | `display_name`, `subfield_name`, `field_name`, `domain_name` |
-| **Relations** | `authorships.csv` | `(work_id, author_id)` | `author_position`, `author_order`, `is_corresponding` |
-| | `affiliations.csv` | `(work_id, author_id, inst_id)` | Contextual institutional affiliation per paper |
-| | `work_topics.csv` | `(work_id, topic_id)` | `score`, `is_primary_topic` |
-| | `work_sources.csv` | `(work_id, source_id)` | `location_role` (primary location host) |
-| | `citations.csv` | `(citing_id, cited_id)` | Directed within-scope edge |
-
----
-
-## 5. Critical Implementation Point 1: Closed-Network Citation Integrity
-
-### The Challenge
-- Real-world bibliometrics cite works outside any sampled boundary.
-- An open citation list produces **dangling pointers**, violating relational Foreign Keys and breaking graph reachability traversals.
-
-### The Solution
-- Enforce a **strict closed-network boundary rule**:
-  $$\text{Edges retained} = \{ (u, v) \in \text{Citations} \mid u \in \text{Works}_{\text{retained}} \land v \in \text{Works}_{\text{retained}} \land u \ne v \}$$
-- Self-citations at work level ($u = u$) are stripped.
-- In the pilot dataset: **8,850 external references were pruned**, keeping 111–240 valid internal citation edges with **0 foreign key violations** and **0 phantom graph nodes**.
+```mermaid
+flowchart TD
+    RAW["Raw JSON Responses"] --> RECON["Reconstruct Plaintext Abstracts"]
+    RECON --> PRUNE["Prune External Citations & Self-Loops (Closed Network)"]
+    PRUNE --> DEDUP["Deduplicate Authorships, Affiliations & Topics"]
+    DEDUP --> CSV["Emit 10 Normalized Canonical CSV Contracts"]
+```
 
 ---
 
-## 6. Critical Implementation Point 2: Work-Contextual Affiliations
+## 6. ETL Workflow: Loading into the Three Databases
 
-### The Fallacy of Static Affiliations
-- In reality, researcher affiliations change over time and vary across projects.
-- Modeling a direct edge `(:Author)-[:AFFILIATED_WITH]->(:Institution)` falsely asserts an author always belonged to that institution for all works.
+```mermaid
+flowchart TD
+    CSV["data/processed/*.csv"] --> L_PG["scripts/load/load_postgres.py\n- Streaming COPY FROM STDIN\n- Schema: openalex (3NF)\n- B-Tree Index Generation"]
+    CSV --> L_NEO["scripts/load/load_neo4j.py\n- Batch UNWIND $rows MERGE\n- Node Uniqueness Constraints\n- Graph Relationships Build"]
+    CSV --> L_DWH["scripts/load/load_warehouse.py\n- Date Key Math (YYYYMMDD)\n- Conformed Dimensions Load\n- fact_work & Bridges Build"]
+```
 
-### Dual-Paradigm Implementation
-- **Relational:** Ternary association table `affiliations(work_id, author_id, institution_id)` with a compound foreign key referencing `authorships(work_id, author_id)`.
-- **Graph:** Neo4j stores `work_id` directly on the relationship:
-  `(:Author)-[:AFFILIATED_WITH {work_id: "W..."}]->(:Institution)`
-- **Query Pattern:** Guarantees work-scoped traversal semantics:
-  ```cypher
-  MATCH (a:Author)-[af:AFFILIATED_WITH]->(i:Institution)
-  MATCH (a)-[:AUTHORED]->(w:Work {id: af.work_id})
-  ```
+- **PostgreSQL 3NF:** High-speed streaming `COPY` loading all 10 tables in under a second; applies check constraints and foreign keys.
+- **Neo4j LPG:** Transactional batch loads (1,000 rows/batch) creating nodes first with unique `id` constraints, then matching endpoints to build directed edges.
+- **Data Warehouse:** Populates conformed dimensions with integer surrogate keys, resolves surrogate mappings in memory, and writes `fact_work` and bridge tables.
 
 ---
 
-## 7. Implementation: Relational OLTP (PostgreSQL)
+## 7. Database Paradigm 1: Relational 3NF (PostgreSQL)
 
-### Model Characteristics
-- Third Normal Form (3NF) relational design in PostgreSQL 16 (`openalex` schema).
-- Cascading referential integrity constraints, check constraints (`cited_by_count >= 0`), composite primary keys.
-- Targeted B-Tree indexes on join and filter columns:
-  - `idx_works_year_type`, `idx_authorships_author`, `idx_affiliations_inst`, `idx_citations_cited`.
+### Model & Schema Characteristics (`openalex` schema)
+- Third Normal Form (3NF) relational design in PostgreSQL 16.
+- Enforces strict entity integrity, composite primary keys, and foreign keys.
+- **Engineered Indexes:** `idx_works_year_type`, `idx_authorships_author`, `idx_affiliations_inst`, `idx_citations_cited`.
 
-### Loading & Validation
-- Loaded via high-performance streaming `COPY FROM STDIN WITH (FORMAT CSV)`.
-- Automated validation queries verify row parity, lack of orphans, and foreign key consistency.
-
----
-
-## 8. Implementation: Graph Database (Neo4j)
-
-### Labeled Property Graph (LPG)
-- **Nodes:** `(:Work)`, `(:Author)`, `(:Institution)`, `(:Source)`, `(:Topic)`.
-- **Edges:**
-  - `(:Author)-[:AUTHORED {author_position, is_corresponding}]->(:Work)`
-  - `(:Author)-[:AFFILIATED_WITH {work_id}]->(:Institution)`
-  - `(:Work)-[:HAS_TOPIC {score, is_primary_topic}]->(:Topic)`
-  - `(:Work)-[:PUBLISHED_IN]->(:Source)`
-  - `(:Work)-[:CITES]->(:Work)`
-
-### Constraints & Indexes
-- Range uniqueness constraints on `(node.id)`.
-- High-throughput batch loading with `UNWIND $rows AS row ... MERGE` transactions (1,000 items/batch).
+```mermaid
+erDiagram
+    WORKS ||--o{ AUTHORSHIPS : has
+    AUTHORS ||--o{ AUTHORSHIPS : writes
+    AUTHORSHIPS ||--o{ AFFILIATIONS : has_contextual_affiliation
+    INSTITUTIONS ||--o{ AFFILIATIONS : receives
+    WORKS ||--o{ WORK_TOPICS : classified_as
+    TOPICS ||--o{ WORK_TOPICS : assigned_to
+    WORKS ||--o{ WORK_SOURCES : published_at
+    SOURCES ||--o{ WORK_SOURCES : hosts
+    WORKS ||--o{ CITATIONS : citing
+    WORKS ||--o{ CITATIONS : cited
+```
 
 ---
 
-## 9. Implementation: Analytical Data Warehouse (Star Schema)
+## 8. Database Paradigm 2: Labeled Property Graph (Neo4j LPG)
 
-### Dimensional Fact Model (DFM)
-- **Fact Table:** `fact_work`
-  - Grain: One row per retained work.
-  - Measures: `publication_count = 1` (fully additive), `cited_by_count` (semi-additive snapshot).
-  - Degenerate Dimension: `publication_year` (retains reporting ability even if full date is unknown).
-- **Conformed Dimensions:** `dim_date`, `dim_source`, `dim_work_type`, `dim_author`, `dim_institution`, `dim_topic`.
+### Graph Schema & Index-Free Adjacency (IFA)
+- First-class Nodes: `(:Work)`, `(:Author)`, `(:Institution)`, `(:Source)`, `(:Topic)`.
+- Typed Relationships: `[:AUTHORED]`, `[:AFFILIATED_WITH {work_id}]`, `[:HAS_TOPIC]`, `[:PUBLISHED_IN]`, `[:CITES]`.
+- **Work-Contextual Affiliation:** Stored as `(:Author)-[:AFFILIATED_WITH {work_id}]->(:Institution)`, preventing timeless affiliation distortion.
 
-### Multi-Valued Bridge Strategy
-- Solves many-to-many author and topic assignments via bridge tables:
-  - `bridge_work_author`, `bridge_work_topic`, `bridge_work_institution`.
-- **Full Association Accounting:** Works multi-assigned to $k$ topics contribute fully to each topic's association-level aggregate. Corpus-wide totals use `fact_work` alone.
+```mermaid
+flowchart LR
+    A["(:Author)"]
+    W["(:Work)"]
+    I["(:Institution)"]
+    S["(:Source)"]
+    T["(:Topic)"]
+
+    A -->|"[:AUTHORED {author_position, is_corresponding}]"| W
+    A -->|"[:AFFILIATED_WITH {work_id}]"| I
+    W -->|"[:HAS_TOPIC {score, is_primary_topic}]"| T
+    W -->|"[:PUBLISHED_IN {location_role}]"| S
+    W -->|"[:CITES]"| W
+```
 
 ---
 
-## 10. Query Expressiveness: SQL vs. Cypher
+## 9. Database Paradigm 3: Analytical Data Warehouse (Star Schema DFM)
 
-### Question 5: Variable-Length Citation Paths (2 to 4 Hops)
+### Dimensional Fact Model (`warehouse` schema)
+- **Fact Table:** `fact_work` (Grain: 1 row per work; Measures: additive `publication_count = 1`, semi-additive `cited_by_count`; Degenerate dimension: `publication_year`).
+- **Conformed Dimensions:** `dim_date`, `dim_source`, `dim_work_type`, `dim_topic`, `dim_author`, `dim_institution`.
+- **Multi-Valued Bridges:** `bridge_work_topic`, `bridge_work_author`, `bridge_work_institution`, `bridge_work_citation` (factless citation bridge). Full association accounting policy preserves fact grain.
 
-#### PostgreSQL Recursive CTE (25 lines)
+```mermaid
+flowchart TD
+    DD["dim_date (date_key)"] --> FW["fact_work\n(work_key, work_id,\npublication_count, cited_by_count)"]
+    DS["dim_source (source_key)"] --> FW
+    DWT["dim_work_type (work_type_key)"] --> FW
+    
+    FW --> BWT["bridge_work_topic\n(work_key, topic_key,\ntopic_score, is_primary)"]
+    FW --> BWA["bridge_work_author\n(work_key, author_key,\nauthor_position, author_order)"]
+    FW --> BWI["bridge_work_institution\n(work_key, institution_key)"]
+    FW -.-> BWC["bridge_work_citation\n(citing_work_key, cited_work_key)\n[Factless Bridge]"]
+    
+    BWT --> DT["dim_topic (topic_key)"]
+    BWA --> DA["dim_author (author_key)"]
+    BWI --> DI["dim_institution (institution_key)"]
+```
+
+---
+
+## 10. The Benchmark Comparison Script: `benchmark_comparison.py`
+
+### Harness Architecture (`scripts/evaluation/benchmark_comparison.py`)
+Automated multi-paradigm test harness running semantically identical queries across all three engines:
+1. **PostgreSQL Relational:** `openalex` schema (3NF SQL).
+2. **PostgreSQL Warehouse:** `warehouse` schema (Star Schema OLAP SQL).
+3. **Neo4j LPG:** Bolt driver session (Cypher).
+
+### Rigorous Evaluation Methodology
+- **Warm-up Run:** 1 untimed execution per query to prime operating system page caches and database shared buffers.
+- **Timed Repetitions:** 5 consecutive warm-cache executions per query.
+- **Metrics Collected:** Median, standard deviation ($\pm$), min, and max wall-clock time in milliseconds (ms).
+- **Parity Verification:** Validates identical result set row counts across all three engines to verify semantic equivalence.
+
+```mermaid
+flowchart LR
+    SELECT["Workload (Q1–Q6)"] --> WARM["1x Warm-up Run\n(Prime Caches)"]
+    WARM --> RUN["5x Timed Repetitions\n(Warm Cache)"]
+    RUN --> STATS["Record Median & Std Dev (ms)\nscripts/evaluation/benchmark_comparison.py"]
+    STATS --> CHECK["Validate Row Count Parity"]
+```
+
+---
+
+## 11. Comparison Queries & Selection Rationale (Part 1: Q1, Q2A, Q2B)
+
+### Q1: LLM Evolution by Year, Work Type, and Source
+- **Query Task:** Roll-up and drill-down of publication counts, average citations, and median citations (`percentile_cont`).
+- **Why Chosen:** Baseline OLAP slicing test. Evaluates group-by and statistical aggregates on single tables/nodes without multi-table join overhead.
+
+### Q2A: Top 20 Authors Productivity (Aggregation)
+- **Query Task:** Group-by over author-work relationships with publication counts and summed citations.
+- **Why Chosen:** Tests $M:N$ tabular aggregation across works and authorships. Evaluates relational C-level `HashAggregate` vs. star bridge joins vs. Cypher `collect(DISTINCT w)` and `reduce()` collection overhead.
+
+### Q2B: Top 20 Institutions (Contextual Affiliations)
+- **Query Task:** Distinct work count and citations per institution, respecting work-contextual affiliations.
+- **Why Chosen:** Evaluates deduplication across ternary associations. In 3NF requires a `DISTINCT` subquery over `affiliations`; in warehouse joins `bridge_work_institution`; in graph requires matching `af.work_id = w.id`.
+
+---
+
+## 12. Comparison Queries & Selection Rationale (Part 2: Q3, Q4, Q5, Q6)
+
+### Q3: Topic-Field Roll-Up in 2020 (Dimensional Slicing)
+- **Query Task:** Hierarchical aggregation up the OpenAlex topic hierarchy (`field_name`) filtered by `publication_year = 2020`.
+- **Why Chosen:** Classic dimensional star schema workload. Tests integer surrogate keys and predicate pushdown on `fact_work` vs. normalized multi-table 3NF joins vs. graph property filtering + edge hops.
+
+### Q4: Inter-Institution Collaboration (Diamond Join)
+- **Query Task:** Identify pairs of institutions collaborating on works in 2020 ($i_1 < i_2$) with collaborative work counts.
+- **Why Chosen:** Tests pairwise collaboration patterns (diamond joins). Relational/warehouse execute self-joins on junction/bridge tables; graph executes symmetric multi-hop pattern `(i1)<-[af1]-(a1)-[:AUTHORED]->(w)<-[:AUTHORED]-(a2)-[af2]->(i2)`.
+
+### Q5: Directed Citation Paths 2–4 Hops (Path Traversal)
+- **Query Task:** Discover multi-hop directed citation cascades of length 2 to 4.
+- **Why Chosen:** Path traversal benchmark. Specifically contrasts graph **Index-Free Adjacency (IFA)** with relational recursive CTEs (`WITH RECURSIVE` + cycle-guard array checks `NOT c.cited = ANY(p.path)`).
+
+### Q6: Co-Authorship Degree (Two-Hop Bipartite Expansion)
+- **Query Task:** Compute author co-authorship degree over shared works in the bipartite author-work network.
+- **Why Chosen:** Tests bipartite two-hop expansion. Contrasts Cypher `(a1)-[:AUTHORED]->(w)<-[:AUTHORED]-(a2)` against relational self-joins and `UNION ALL`.
+
+---
+
+## 13. Benchmark Results & Timings (from `analys_results.txt`)
+
+*Data source: `docs/analys_results.txt` (Median wall-clock execution time in ms over 5 warm-cache runs)*
+
+| Workload | Task / Query Description | Relational (ms) | Warehouse (ms) | Graph Neo4j (ms) | Winner |
+|---|---|---|---|---|---|
+| **Q1** | LLM/Generative-AI Evolution by Year | 2.18 (±0.4) | **1.96 (±0.2)** | 12.21 (±25.7) | **Warehouse** |
+| **Q2A** | Top 20 Authors Productivity (Agg) | 60.37 (±0.4) | **18.81 (±0.4)** | 29.60 (±15.8) | **Warehouse** |
+| **Q2B** | Top 20 Institutions (Contextual) | 11.83 (±0.3) | **5.90 (±3.6)** | 56.32 (±15.0) | **Warehouse** |
+| **Q3** | Topic-Field Roll-Up in 2020 (Dim) | 4.97 (±5.1) | **2.44 (±0.9)** | 7.29 (±6.6) | **Warehouse** |
+| **Q4** | Inter-Institution Collaboration | 10.93 (±0.4) | **4.22 (±2.4)** | 22.59 (±11.2) | **Warehouse** |
+| **Q5** | Directed Citation Paths 2–4 Hops | 1585.86 (±33.7) | **1272.42 (±12.5)** | 1413.41 (±37.4) | **Warehouse** |
+| **Q6** | Co-Authorship Degree (Two-Hop) | 381.86 (±5.4) | 235.48 (±33.7) | **124.23 (±18.4)** | **Graph** |
+
+- **Summary:** Data Warehouse won **6 out of 7** queries (Q1, Q2A, Q2B, Q3, Q4, Q5). Neo4j Graph won **Q6** decisively.
+
+---
+
+## 14. Architectural Analysis of Results
+
+### Why Data Warehouse Dominated Aggregations & Slicing (Q1, Q2A, Q2B, Q3, Q4)
+- **Surrogate Integer Keys:** Fast integer hash joins in `bridge_work_author` and `bridge_work_institution` avoid text string UUID comparisons in 3NF.
+- **Predicate Pushdown & Compact Grain:** Filtering `fact_work.publication_year = 2020` immediately eliminates non-qualifying rows without table joins.
+- **Relational Aggregate Maturity:** PostgreSQL C-level `HashAggregate` is vastly superior to Cypher's Java heap allocation and `collect()` / `reduce()` overhead.
+
+### Why Graph (Neo4j) Won Bipartite Neighborhood Expansion (Q6)
+- **Two-Hop Bipartite Expansion:** Neo4j traversed `(:Author)-[:AUTHORED]->(:Work)<-[:AUTHORED]-(:Author)` directly in **124.23 ms** (vs. 235.48 ms Warehouse, 381.86 ms Relational).
+- **Avoiding Expensive Self-Joins:** Relational engines required materializing a self-join over authorships, computing bidirectional degrees, and running an expensive `UNION ALL` followed by an outer `GROUP BY`.
+
+### Deep Citation Paths (Q5)
+- Warehouse recursive CTE on `bridge_work_citation` achieved **1272.42 ms**, outperforming Neo4j (**1413.41 ms**) and 3NF Relational (**1585.86 ms**). Compact BIGINT arrays in PostgreSQL recursive worktables provided strong in-memory cache locality for this corpus size.
+
+---
+
+## 15. Query Expressiveness: SQL vs. Cypher (Q5 Citation Paths)
+
+### PostgreSQL Recursive CTE (25 lines)
 ```sql
 WITH RECURSIVE citation_paths AS (
-  SELECT c.citing_work_id, c.cited_work_id, ARRAY[c.citing_work_id, c.cited_work_id]::TEXT[] AS path, 1 AS hops
+  SELECT c.citing_work_id AS start_id, c.cited_work_id AS curr_id,
+         ARRAY[c.citing_work_id, c.cited_work_id]::TEXT[] AS path, 1 AS hops
   FROM citations c WHERE c.citing_work_id = :start_id
   UNION ALL
-  SELECT p.citing_work_id, c.cited_work_id, p.path || c.cited_work_id, p.hops + 1
-  FROM citation_paths p JOIN citations c ON c.citing_work_id = p.cited_work_id
-  WHERE p.hops < 4 AND NOT c.cited_work_id = ANY (p.path)
+  SELECT p.start_id, c.cited_work_id, p.path || c.cited_work_id, p.hops + 1
+  FROM citation_paths p JOIN citations c ON c.citing_work_id = p.curr_id
+  WHERE p.hops < 4 AND NOT c.cited_work_id = ANY (p.path) -- Cycle guard
 )
-SELECT * FROM citation_paths WHERE hops BETWEEN 2 AND 4;
+SELECT start_id, curr_id, hops, path FROM citation_paths WHERE hops BETWEEN 2 AND 4;
 ```
 
-#### Neo4j Cypher Native Traversal (3 lines)
+### Neo4j Cypher Native Traversal (3 lines)
 ```cypher
-MATCH p = (start:Work {id: $start_id})-[:CITES*2..4]->(target:Work)
+MATCH (start:Work {id: $start_id})
+MATCH p = (start)-[:CITES*2..4]->(target:Work)
 RETURN length(p) AS hops, [n IN nodes(p) | n.id] AS path;
 ```
-**Takeaway:** Cypher expresses topological path traversal concisely with built-in uniqueness and pointer-chasing; SQL requires recursive CTEs, manual array cycle tracking, and expensive self-joins.
+- **Takeaway:** Cypher expresses topological reachability with built-in path uniqueness and pointer chasing; SQL requires manual array cycle tracking and recursive worktable memory overhead.
 
 ---
 
-## 11. Performance Analysis & Execution Plans
+## 16. Paradigm Decision Matrix & Conclusions
 
-### Relational Execution (`EXPLAIN ANALYZE, BUFFERS`)
-- **Top Authors (Q2A):** Hash Join `authors` $\to$ HashAggregate on `(work_id, author_id)` $\to$ Sort.
-  - Execution time: **5.67 ms** (warm cache, pilot data).
-- **Institutional Pairs (Q4):** Nested Loop / Hash Join of self-joined affiliations with subquery distinct filtering.
-
-### Warehouse vs. 3NF Relational Timing
-- **Star Schema Aggregations:** Slicing by `dim_work_type` or `publication_year` directly on `fact_work` avoids 3NF multi-table join paths, scanning compact sequential blocks.
-- **Bridge Queries:** Streamlined integer surrogate keys (`work_key`, `author_key`) accelerate hash joins compared to text string UUID joins in the normalized OLTP schema.
-
-### Graph Profile (`PROFILE`)
-- **Index-Free Adjacency:** Directed citations traversed directly in memory via double-linked pointer chains without index lookups after starting node identification.
-
----
-
-## 12. Explicit Final Results: Domain Insights
-
-### 1. The Preprint Dominance Phenomenon
-- In the 2020 foundation model cohort, **preprints outnumbered peer-reviewed articles by >2:1** (435 preprints vs. 203 articles).
-- High citation velocity across both: Mean citations of **54.72** (articles) vs. **51.41** (preprints), reflecting arXiv-first research dissemination in generative AI.
-
-### 2. Scholarly Productivity & Impact Leaders
-- Top authors in corpus:
-  - **Jianfeng Gao:** 11 works, 1,104 citations
-  - **Richard Socher:** 10 works, 699 citations
-  - **Furu Wei:** 7 works, 1,082 citations
-  - **Ming Zhou:** 5 works, 1,113 citations
-  - **Yejin Choi:** 7 works, 256 citations
-
-### 3. Citation Path Distribution (G1)
-- 2-hop paths: **419** | 3-hop paths: **175** | 4-hop paths: **37**
-- Proves clear citation clustering around early seminal transformer architectures.
-
----
-
-## 13. Paradigm Decision Matrix
-
-| Dimension | PostgreSQL (Relational 3NF) | Neo4j (Graph LPG) | Data Warehouse (Star Schema) |
+| Dimension | PostgreSQL Relational (3NF) | Neo4j Graph (LPG) | PostgreSQL Data Warehouse (Star Schema) |
 |---|---|---|---|
-| **Best Fit For** | Transactional CRUD, data integrity, strict typing | Deep path discovery, co-authorship, centrality | Slicing/dicing, trend analysis, reporting roll-ups |
-| **Schema Flexibility** | Rigid (DDL migrations required) | Dynamic (property additions effortless) | Structured (Dimensional bus architecture) |
-| **Join Scalability** | Degrades with join depth ($>3$ tables) | O(1) per step via Index-Free Adjacency | Predictable star joins against Fact table |
-| **Path Traversal Syntax** | Verbose (`WITH RECURSIVE`, array loops) | Intuitive ASCII pattern `(a)-[:CITES*]->(b)` | Factless relationship bridge required |
-| **Aggregation Power** | Excellent SQL window functions & CTEs | Adequate (`collect()`, `reduce()`), higher RAM | Superior (Vectorized aggregates, columnar-ready) |
+| **Optimal Workloads** | Transactional CRUD, data integrity, strict constraints | Topological path traversals, neighbor degree, centrality | Multidimensional slicing, roll-up, drill-down, analytical reporting |
+| **Join Scalability** | Joins degrade with depth ($>3$ tables); high memory | **$O(1)$ per hop** via Index-Free Adjacency (pointer chasing) | Star joins against single Fact table; integer surrogate keys |
+| **Path Traversal Syntax** | Verbose `WITH RECURSIVE` + array cycle tracking | **Concise Cypher pattern** `[:CITES*2..4]`, built-in uniqueness | Factless relationship bridge required (`bridge_work_citation`) |
+| **Aggregation Power** | High (mature SQL window functions, hash aggregates) | Moderate (higher RAM usage with `collect()`/`reduce()`) | **Highest** (optimized star hash joins, pre-computed bridges) |
+| **Schema Evolution** | Rigid (requires formal DDL migrations) | **Flexible** (nodes/edges accept dynamic properties) | Structured (dimensional bus architecture) |
 
----
-
-## 14. Summary & Conclusions
-
-### Project Accomplishments
-1. **End-to-End Reproducibility:** Automated pipeline from OpenAlex API to 3 operational database architectures.
-2. **Methodological Rigor:** 100% data reconciliation, closed-network edge consistency, and exact semantic alignment between SQL and Cypher queries.
-3. **Multi-Paradigm Insights:** Demonstrated empirical proof of where graph engines surpass relational engines (paths/networks) and where dimensional schemas excel (aggregations/slicing).
-
-### Deliverables in Repository
-- `scripts/extract/gather.py`: Resilient OpenAlex extractor with cursor pagination.
-- `scripts/transform/run_etl.py`: Strict reconciliation & quality validation engine.
-- `sql/relational/`: 3NF schema, index suite, analytical SQL, EXPLAIN benchmarks.
-- `sql/warehouse/`: DFM star schema, conformed dimensions, bridge tables.
-- `cypher/`: Constraints, LPG loads, shared queries, graph-native algorithms.
-- `docs/evidence/`: Complete verification transcripts and query execution plans.
+### Note on Information Completeness
+*All metrics and results are taken directly from `docs/analys_results.txt` and repository source code. Distributed cluster metrics or hardware telemetry beyond local single-node execution were not present in the workspace and should be inserted manually if desired.*

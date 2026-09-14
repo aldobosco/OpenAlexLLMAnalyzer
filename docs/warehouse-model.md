@@ -9,6 +9,22 @@ does not read raw OpenAlex JSON or the `openalex` relational schema.
 `fact_work` has one row per retained OpenAlex work. It contains the additive
 `publication_count = 1` and the observed `cited_by_count` snapshot measure.
 
+```mermaid
+flowchart TD
+    DD["dim_date (date_key)"] --> FW["fact_work\n(work_key, work_id, publication_count, cited_by_count)"]
+    DS["dim_source (source_key)"] --> FW
+    DWT["dim_work_type (work_type_key)"] --> FW
+    
+    FW --> BWT["bridge_work_topic\n(work_key, topic_key, topic_score, is_primary)"]
+    FW --> BWA["bridge_work_author\n(work_key, author_key, author_position, author_order)"]
+    FW --> BWI["bridge_work_institution\n(work_key, institution_key)"]
+    FW -.-> BWC["bridge_work_citation\n(citing_work_key, cited_work_key)\n[Factless Bridge]"]
+    
+    BWT --> DT["dim_topic (topic_key)"]
+    BWA --> DA["dim_author (author_key)"]
+    BWI --> DI["dim_institution (institution_key)"]
+```
+
 ```text
 dim_date       dim_source       dim_work_type
     \              |                /

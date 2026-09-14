@@ -1152,60 +1152,96 @@ citations = [
 
       <!-- SLIDE 12: Benchmark & Execution Profile -->
       <section class="slide">
-        <span class="slide-tag">Performance & Profiling</span>
-        <h2 class="slide-title">11. Execution Profiles & Benchmark Analysis</h2>
-        <p class="slide-subtitle">Evidence gathered from PostgreSQL <code>EXPLAIN ANALYZE</code> and Neo4j <code>PROFILE</code>.</p>
+        <span class="slide-tag">Empirical Evaluation</span>
+        <h2 class="slide-title">11. Cross-Paradigm Benchmark Results & Timings</h2>
+        <p class="slide-subtitle">Automated benchmark runner: <code>scripts/evaluation/benchmark_comparison.py</code> (1 warm-up + 5 warm-cache timed runs). Source: <code>docs/analys_results.txt</code>.</p>
 
-        <div class="grid-3">
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">PostgreSQL 3NF</span>
-              <span class="card-pill pill-blue">Plan: HashJoin</span>
-            </div>
-            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">
-              <strong>Q2A Top Authors:</strong> Execution time <strong>5.67 ms</strong>. Hash Join on authorships $\to$ HashAggregate $\to$ Sort.
-            </p>
-            <div class="metric-box">
-              <div class="metric-value" style="color: var(--accent-blue);">5.67 ms</div>
-              <div class="metric-label">Execution Time (Warm Cache)</div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Data Warehouse</span>
-              <span class="card-pill pill-purple">Plan: Star Hash</span>
-            </div>
-            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">
-              Single integer join from <code>fact_work</code> to bridge. Avoids text UUID matching and subquery deduplication passes.
-            </p>
-            <div class="metric-box">
-              <div class="metric-value" style="color: var(--accent-purple);">1.84 ms</div>
-              <div class="metric-label">Avg Slicing Query Time</div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Neo4j Graph Engine</span>
-              <span class="card-pill pill-emerald">Plan: Expand(All)</span>
-            </div>
-            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">
-              Traversals execute through pointer arrays. No join tables in RAM; memory is proportional to active path depth.
-            </p>
-            <div class="metric-box">
-              <div class="metric-value" style="color: var(--accent-emerald);">419</div>
-              <div class="metric-label">2-Hop Paths Discovered</div>
-            </div>
-          </div>
+        <div class="table-container" style="margin-top: 10px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Workload</th>
+                <th>Task / Query Description</th>
+                <th>Relational 3NF (ms)</th>
+                <th>Data Warehouse (ms)</th>
+                <th>Graph Neo4j (ms)</th>
+                <th>Winner</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Q1</strong></td>
+                <td>LLM/Generative-AI Evolution by Year & Work Type</td>
+                <td>2.18 <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.4)</span></td>
+                <td><strong style="color: var(--accent-emerald);">1.96</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.2)</span></td>
+                <td>12.21 <span style="color: var(--text-muted); font-size: 0.75rem;">(±25.7)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q2A</strong></td>
+                <td>Top 20 Authors Productivity (M:N Aggregation)</td>
+                <td>60.37 <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.4)</span></td>
+                <td><strong style="color: var(--accent-emerald);">18.81</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.4)</span></td>
+                <td>29.60 <span style="color: var(--text-muted); font-size: 0.75rem;">(±15.8)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q2B</strong></td>
+                <td>Top 20 Institutions (Contextual Affiliations)</td>
+                <td>11.83 <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.3)</span></td>
+                <td><strong style="color: var(--accent-emerald);">5.90</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±3.6)</span></td>
+                <td>56.32 <span style="color: var(--text-muted); font-size: 0.75rem;">(±15.0)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q3</strong></td>
+                <td>Topic-Field Roll-Up in 2020 (Dimensional Slicing)</td>
+                <td>4.97 <span style="color: var(--text-muted); font-size: 0.75rem;">(±5.1)</span></td>
+                <td><strong style="color: var(--accent-emerald);">2.44</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.9)</span></td>
+                <td>7.29 <span style="color: var(--text-muted); font-size: 0.75rem;">(±6.6)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q4</strong></td>
+                <td>Inter-Institution Collaboration (Diamond Join)</td>
+                <td>10.93 <span style="color: var(--text-muted); font-size: 0.75rem;">(±0.4)</span></td>
+                <td><strong style="color: var(--accent-emerald);">4.22</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±2.4)</span></td>
+                <td>22.59 <span style="color: var(--text-muted); font-size: 0.75rem;">(±11.2)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q5</strong></td>
+                <td>Directed Citation Paths 2–4 Hops (Path Traversal)</td>
+                <td>1585.86 <span style="color: var(--text-muted); font-size: 0.75rem;">(±33.7)</span></td>
+                <td><strong style="color: var(--accent-emerald);">1272.42</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±12.5)</span></td>
+                <td>1413.41 <span style="color: var(--text-muted); font-size: 0.75rem;">(±37.4)</span></td>
+                <td><span class="card-pill pill-purple">Warehouse</span></td>
+              </tr>
+              <tr>
+                <td><strong>Q6</strong></td>
+                <td>Co-Authorship Degree (Two-Hop Bipartite Expansion)</td>
+                <td>381.86 <span style="color: var(--text-muted); font-size: 0.75rem;">(±5.4)</span></td>
+                <td>235.48 <span style="color: var(--text-muted); font-size: 0.75rem;">(±33.7)</span></td>
+                <td><strong style="color: var(--accent-emerald);">124.23</strong> <span style="color: var(--text-muted); font-size: 0.75rem;">(±18.4)</span></td>
+                <td><span class="card-pill pill-emerald">Graph (Neo4j)</span></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <div style="margin-top: 20px; padding: 16px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">
-          <strong style="color: #fff; font-size: 0.9rem;">Benchmarking Insight:</strong>
-          <span style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.5; margin-left: 8px;">
-            For aggregations with filters, Relational & Warehouse engines excel with vectorized arithmetic. 
-            For graph path finding and neighbor degree calculation (Q5 & G1-G4), Neo4j avoids the exponential joins that stall relational recursive CTEs.
-          </span>
+        <div class="grid-2" style="margin-top: 14px;">
+          <div style="padding: 12px 16px; background: rgba(129, 140, 248, 0.1); border: 1px solid rgba(129, 140, 248, 0.3); border-radius: var(--radius-sm);">
+            <strong style="color: var(--accent-indigo); font-size: 0.85rem;">Why Warehouse Won 6/7 Queries:</strong>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+              Fast surrogate integer keys eliminate string comparisons; predicate pushdown on <code>fact_work</code> limits scanned volume; mature C-level <code>HashAggregate</code> avoids Neo4j Java collection memory overhead.
+            </p>
+          </div>
+          <div style="padding: 12px 16px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); border-radius: var(--radius-sm);">
+            <strong style="color: var(--accent-emerald); font-size: 0.85rem;">Why Graph Decisively Won Q6 (Co-Authorship Degree):</strong>
+            <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+              Neo4j traversed the bipartite expansion <code>(:Author)-[:AUTHORED]->(w)<-[:AUTHORED]-(:Author)</code> directly in <strong>124.23 ms</strong> (3x faster than relational), avoiding massive self-joins and union passes.
+            </p>
+          </div>
         </div>
       </section>
 

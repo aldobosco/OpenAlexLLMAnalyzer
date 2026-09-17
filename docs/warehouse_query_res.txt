@@ -1,0 +1,182 @@
+SET
+ publication_year | work_type | work_count | avg_cited_by_count | median_cited_by_count 
+------------------+-----------+------------+--------------------+-----------------------
+             2020 | article   |        203 |              54.72 |                    19
+             2020 | preprint  |        435 |              51.41 |                    15
+             2021 | article   |        302 |              64.19 |                    26
+             2021 | preprint  |        386 |              58.05 |                    20
+             2021 | review    |          3 |              28.00 |                    17
+             2022 | article   |        334 |              99.48 |                    36
+             2022 | preprint  |        462 |             111.25 |                    35
+             2022 | review    |          4 |              66.50 |                    61
+             2023 | article   |        586 |             471.99 |                   162
+             2023 | preprint  |        199 |             251.63 |                   149
+             2023 | review    |         15 |             352.40 |                   132
+             2024 | article   |        736 |             177.92 |                   114
+             2024 | preprint  |         33 |             161.97 |                   118
+             2024 | review    |         31 |             190.48 |                   139
+             2025 | article   |        733 |              75.09 |                    50
+             2025 | preprint  |          9 |             112.56 |                    49
+             2025 | review    |         58 |              82.79 |                    60
+(17 rows)
+
+  author_id  |     display_name     | work_count | summed_work_citations 
+-------------+----------------------+------------+-----------------------
+ A5114910293 | Jianfeng Gao         |         27 |                  4799
+ A5067919401 | Luke Zettlemoyer     |         25 |                  1968
+ A5102992157 | Yejin Choi           |         24 |                  1548
+ A5100320723 | Zhiyuan Liu          |         23 |                  2984
+ A5014662947 | Furu Wei             |         22 |                  2228
+ A5025255782 | Percy Liang          |         21 |                  4584
+ A5046448314 | Maosong Sun          |         21 |                  2209
+ A5064905883 | Burkhard Rost        |         21 |                  1981
+ A5075726670 | Michael Heinzinger   |         20 |                  1789
+ A5088551093 | Quoc V. Le           |         18 |                  8451
+ A5073483894 | Jakob Nikolas Kather |         18 |                  2874
+ A5051745436 | Weizhu Chen          |         17 |                  1754
+ A5061512999 | Denny Zhou           |         16 |                  9720
+ A5103069680 | Yi Tay               |         16 |                  5169
+ A5036357902 | Philip S. Yu         |         16 |                  4538
+ A5045077843 | Colin Raffel         |         16 |                  4071
+ A5025631695 | Ji-Rong Wen          |         16 |                  2869
+ A5005779176 | James Zou            |         16 |                  2641
+ A5032046813 | Caiming Xiong        |         16 |                  2363
+ A5039899830 | Eyal Klang           |         16 |                  2051
+(20 rows)
+
+ institution_id |             display_name              | work_count | citations 
+----------------+---------------------------------------+------------+-----------
+ I97018004      | Stanford University                   |        142 |     37447
+ I136199984     | Harvard University                    |         99 |     17797
+ I1291425158    | Google (United States)                |         76 |     12154
+ I99065089      | Tsinghua University                   |         72 |      8672
+ I63966007      | Massachusetts Institute of Technology |         71 |     15464
+ I57206974      | New York University                   |         61 |     19532
+ I62916508      | Technical University of Munich        |         61 |     15730
+ I40120149      | University of Oxford                  |         56 |      8754
+ I172675005     | Nanyang Technological University      |         54 |      9607
+ I19820366      | Chinese Academy of Sciences           |         51 |      7568
+ I95457486      | University of California, Berkeley    |         50 |     10896
+ I20231570      | Peking University                     |         50 |     10034
+ I201448701     | University of Washington              |         50 |      6590
+ I241749        | University of Cambridge               |         48 |      9527
+ I889458895     | University of Hong Kong               |         47 |      9398
+ I183067930     | Shanghai Jiao Tong University         |         47 |      5150
+ I205783295     | Cornell University                    |         46 |      6341
+ I185261750     | University of Toronto                 |         44 |     10881
+ I78577930      | Columbia University                   |         44 |      6145
+ I74973139      | Carnegie Mellon University            |         43 |     11624
+(20 rows)
+
+                  field_name                  | work_count | avg_citations 
+----------------------------------------------+------------+---------------
+ Computer Science                             |        582 |         53.23
+ Biochemistry, Genetics and Molecular Biology |         56 |         63.08
+ Social Sciences                              |         36 |         21.12
+ Engineering                                  |         22 |         46.80
+ Psychology                                   |         21 |         38.69
+ Neuroscience                                 |         19 |         29.74
+ Medicine                                     |         17 |         57.52
+ Decision Sciences                            |         17 |         48.53
+ Materials Science                            |          8 |        137.75
+ Arts and Humanities                          |          6 |         20.89
+ Physics and Astronomy                        |          6 |         60.89
+ Health Professions                           |          5 |         43.83
+ Business, Management and Accounting          |          3 |         82.75
+ Environmental Science                        |          2 |         14.00
+ Agricultural and Biological Sciences         |          2 |         12.50
+ Immunology and Microbiology                  |          2 |         16.33
+ Pharmacology, Toxicology and Pharmaceutics   |          1 |         10.00
+ Economics, Econometrics and Finance          |          1 |         43.00
+ Chemistry                                    |          1 |         13.00
+(19 rows)
+
+                          institution_1                          |                          institution_2                          | collaborative_work_count | summed_work_citations 
+-----------------------------------------------------------------+-----------------------------------------------------------------+--------------------------+-----------------------
+ Google (United States)                                          | Stanford University                                             |                        4 |                   835
+ Berkeley College                                                | University of California, Berkeley                              |                        3 |                   736
+ Supélec                                                         | University of Applied Sciences and Arts of Southern Switzerland |                        3 |                    36
+ University of Applied Sciences and Arts of Southern Switzerland | Shandong University of Political Science and Law                |                        3 |                    36
+ Supélec                                                         | Shandong University of Political Science and Law                |                        3 |                    36
+ Google (United States)                                          | Google DeepMind (United Kingdom)                                |                        3 |                    31
+ Meta (Israel)                                                   | Harvard University Press                                        |                        2 |                   377
+ Google (United States)                                          | University of California, Berkeley                              |                        2 |                   279
+ University of Washington                                        | Allen Institute for Artificial Intelligence                     |                        2 |                   148
+ Humboldt-Universität zu Berlin                                  | Charité - Universitätsmedizin Berlin                            |                        2 |                    95
+ Humboldt-Universität zu Berlin                                  | Freie Universität Berlin                                        |                        2 |                    95
+ Freie Universität Berlin                                        | Charité - Universitätsmedizin Berlin                            |                        2 |                    95
+ Centre National de la Recherche Scientifique                    | Laboratoire des Systèmes Perceptifs                             |                        2 |                    91
+ Radboud University Nijmegen                                     | Max Planck Institute for Psycholinguistics                      |                        2 |                    75
+ Google (United States)                                          | Harvard University Press                                        |                        2 |                    75
+ University of Toronto                                           | Laboratoire de Sciences Cognitives et Psycholinguistique        |                        2 |                    71
+ University of Illinois Urbana-Champaign                         | Salesforce (United States)                                      |                        2 |                    66
+ University of Washington                                        | Microsoft Research (United Kingdom)                             |                        2 |                    58
+ University of Manchester                                        | The Alan Turing Institute                                       |                        2 |                    44
+ Meta (Israel)                                                   | Microsoft Research (United Kingdom)                             |                        2 |                    44
+ University of Illinois Chicago                                  | Amazon (Germany)                                                |                        2 |                    44
+ Harvard University Press                                        | Massachusetts Institute of Technology                           |                        2 |                    37
+ University of Washington                                        | Meta (Israel)                                                   |                        2 |                    34
+ University of Science and Technology of China                   | Queen's University                                              |                        2 |                    30
+ Meta (Israel)                                                   | Carnegie Mellon University                                      |                        2 |                    29
+ Google (United States)                                          | Université de Montréal                                          |                        2 |                    26
+ University of Southern California                               | California Southern University                                  |                        2 |                    26
+ University of Southern California                               | University of California, Los Angeles                           |                        2 |                    25
+ The University of Tokyo                                         | Nara Institute of Science and Technology                        |                        2 |                    21
+ Dublin Business School                                          | Dublin City University                                          |                        2 |                    15
+(30 rows)
+
+ hops | path_count 
+------+------------
+    2 |     100607
+    3 |     375290
+    4 |    1049387
+(3 rows)
+
+  author_id  |         display_name          | coauthor_degree 
+-------------+-------------------------------+-----------------
+ A5045077843 | Colin Raffel                  |             315
+ A5082569485 | Alicia Parrish                |             312
+ A5055969617 | Aakanksha Chowdhery           |             309
+ A5003562101 | Oriol Vinyals                 |             284
+ A5026064427 | Barret Zoph                   |             283
+ A5000043237 | Niklas Muennighoff            |             277
+ A5052454696 | Adam Roberts                  |             277
+ A5063017186 | Christopher A. Choquette-Choo |             266
+ A5059460567 | Sebastian Borgeaud            |             265
+ A5005349213 | Demis Hassabis                |             264
+ A5052263308 | James T. Bradbury             |             263
+ A5053301405 | Laurent Sifre                 |             263
+ A5065128060 | Yossi Matias                  |             261
+ A5022994077 | Daphne Ippolito               |             260
+ A5014400463 | Jacob Austin                  |             259
+ A5101597225 | Andrew M. Dai                 |             257
+ A5056219662 | Albert Webson                 |             255
+ A5011889606 | Jeff Dean                     |             252
+ A5034084374 | Siamak Shakeri                |             249
+ A5112149946 | Morgane Rivière               |             249
+(20 rows)
+
+  source_id  |                         display_name                          | source_type | work_count | avg_cited_by_count | total_cited_by_count 
+-------------+---------------------------------------------------------------+-------------+------------+--------------------+----------------------
+ S4306400194 | arXiv (Cornell University)                                    | repository  |       1355 |              97.78 |               132487
+ S2485537415 | IEEE Access                                                   | journal     |        120 |              78.44 |                 9413
+ S4306402567 | bioRxiv (Cold Spring Harbor Laboratory)                       | repository  |         79 |             112.09 |                 8855
+ S4210195431 | npj Digital Medicine                                          | journal     |         70 |             160.53 |                11237
+             | Unknown source                                                |             |         61 |              86.39 |                 5270
+ S64187185   | Nature Communications                                         | journal     |         55 |             209.60 |                11528
+ S196734849  | Scientific Reports                                            | journal     |         49 |             116.41 |                 5704
+ S4210205812 | Applied Sciences                                              | journal     |         46 |              85.41 |                 3929
+ S17147534   | Journal of Medical Internet Research                          | journal     |         45 |             140.18 |                 6308
+ S2912241403 | Nature Machine Intelligence                                   | journal     |         34 |             174.68 |                 5939
+ S137773608  | Nature                                                        | journal     |         32 |             549.28 |                17577
+ S157921468  | ACM Computing Surveys                                         | journal     |         30 |             259.17 |                 7775
+ S125754415  | Proceedings of the National Academy of Sciences               | journal     |         30 |             174.80 |                 5244
+ S2729999759 | Transactions of the Association for Computational Linguistics | journal     |         30 |             147.30 |                 4419
+ S4210219776 | Information                                                   | journal     |         28 |              88.68 |                 2483
+ S203256638  | Nature Medicine                                               | journal     |         27 |             401.85 |                10850
+ S52395412   | Bioinformatics                                                | journal     |         27 |             112.41 |                 3035
+ S4210217848 | JAMA Network Open                                             | journal     |         22 |             172.55 |                 3796
+ S4210183364 | Computers and Education Artificial Intelligence               | journal     |         22 |             130.86 |                 2879
+ S129839026  | Journal of the American Medical Informatics Association       | journal     |         22 |             122.36 |                 2692
+(20 rows)
+

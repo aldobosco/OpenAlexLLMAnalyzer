@@ -71,13 +71,14 @@ ORDER BY hops;
 // Q6: Co-Authorship Degree (Two-Hop Bipartite Expansion)
 // Author node degree over shared work co-authorship.
 MATCH (a1:Author)-[:AUTHORED]->(w:Work)<-[:AUTHORED]-(a2:Author)
-WHERE a1.id < a2.id
+WHERE a1 <> a2
 WITH a1, collect(DISTINCT a2) AS coauthors
 RETURN a1.id AS author_id,
        a1.display_name AS author_name,
        size(coauthors) AS coauthor_degree
 ORDER BY coauthor_degree DESC, author_id
 LIMIT 20;
+ 
 
 // =============================================================================
 // Supplementary Queries
